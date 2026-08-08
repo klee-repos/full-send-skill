@@ -1,0 +1,4 @@
+# scratchpad artifacts (full-send writes plans/RCAs/proofs here when run in-repo)
+# (vestigial: the skill no longer writes an in-repo scratchpad — kept so an older
+#  run's leftovers can never be committed)
+.full-send/
