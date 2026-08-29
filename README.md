@@ -10,13 +10,16 @@ The point of the whole thing: **no claim of "done" is trusted unless it is prove
 
 Given a feature or bug, `full-send` runs (and loops) this pipeline without stopping to ask permission at each phase:
 
+0. **Contract & board** — restate the pipeline, capture every hard constraint verbatim, and create the run directory and `LEDGER.md` before the first agent is spawned.
 1. **Ground truth** — for bugs, a formal RCA from real data (real DB rows, real logs, real traces) verified before reading source; for features, parallel read-only mapping agents that cite `file:line`.
-2. **Plan** — written to a scratchpad (never the repo tree, never committed), with numbered fix sections and a test-coverage tree.
-3. **Review gate A** — engineering (+ design) review. Uses `/autoplan` if installed, else a built-in rubric fallback so the gate never halts.
-4. **Adversarial review (the signature move)** — N single-lens attackers cite `file:line` → per-finding fresh verifiers that **default to REFUTED** → synthesize survivors into plan edits and a GO / GO-WITH-PATCHES / NO-GO verdict. Asymmetric skepticism is the anti-rubber-stamp mechanism.
-5. **Implement** — direct, single-threaded, in the main thread. Fan-out is for investigation and review, not for writing code.
-6. **Agentic E2E validation** — a deterministic assertion against the REAL running artifact (CLI binary, live endpoint, real user clicks on real screens). The LLM never decides pass/fail.
-7. **Loop** — debug from real signal, re-run the adversarial pass, prove red/green on every new test, until stable green-with-proof against current state.
+2. **Design lane** — for UI work only: reference research, then a cross-check against the project's design source of truth.
+3. **Plan** — written to a scratchpad (never the repo tree, never committed), with numbered fix sections and a test-coverage tree.
+4. **Review gate A** — engineering (+ design) review. Reads a delegated review skill's own file first and skips it when it declares an interactive gate, so the gate is autonomous and never halts on a sub-skill prompt; otherwise a built-in rubric fallback runs the same substance.
+5. **Review gate B: the adversarial review** (the signature move) — N single-lens attackers cite `file:line` → per-finding fresh verifiers that **default to REFUTED** → synthesize survivors into plan edits and a GO / GO-WITH-PATCHES / NO-GO verdict. Asymmetric skepticism is the anti-rubber-stamp mechanism.
+6. **Implement** — direct, single-threaded, in the main thread. Fan-out is for investigation and review, not for writing code.
+7. **Agentic end-to-end validation** — a deterministic assertion against the REAL running artifact (CLI binary, live endpoint, real user clicks on real screens). The LLM never decides pass/fail.
+8. **Loop** — debug from real signal, re-run the adversarial pass, prove red/green on every new test, until stable green-with-proof against current state.
+9. **Close out** — a handoff pack for the human reviewer, the tracked work item refreshed from the final diff, and every number in the closing report re-derived from disk.
 
 Two invariants hold across every phase that fans work out to agents:
 
@@ -68,7 +71,7 @@ Then invoke it from a Claude Code session: ask for the pipeline by name (e.g. *"
 
 `full-send` is part of a larger skill set and references these companion skills by name. They are **optional** — the skill degrades gracefully when they're absent — but installing them unlocks the full pipeline:
 
-- **`/autoplan`** — autonomous plan-review path (Gate A). When absent, `full-send` falls back to the built-in rubric in `references/plan-review-rubric.md`.
+- **`/autoplan`** — autonomous plan-review path (Gate A). `full-send` reads its skill file before invoking it and falls back to the built-in rubric in `references/plan-review-rubric.md` when it is absent, when it declares an interactive gate, or when its lens set does not fit the change's surface.
 - **`/plan-eng-review`**, **`/plan-design-review`** — interactive engineering and design review. Used directly only when a human is driving; otherwise autoplan or the rubric subagent runs their substance non-interactively.
 - **Mobbin MCP** (`mcp__mobbin__search_screens` / `search_flows`) — design inspiration for UI work. When absent, falls back to provided screenshots / the project's design source of truth.
 
@@ -85,6 +88,7 @@ skill/full-send/
     ├── adversarial-review.md             # Attack→Verify→Synthesize template, lens catalog, schemas
     ├── agentic-e2e.md                    # deterministic-verdict principle, harness discovery, tier table
     ├── investigation-and-plan.md         # read-only ground-truth fan-out template + plan skeleton
+    ├── limits-and-recovery.md            # rollback, plan invalidation, open-ended scope, push-back, cost ceiling, handoff
     ├── plan-review-rubric.md             # eng-lens + design-lens checklists (Gate A fallback)
     └── run-ledger-and-supervision.md     # file-backed shared state + agent liveness/stall handling
 ```

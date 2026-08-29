@@ -8,15 +8,15 @@ must be real, not remembered.
 Spawn 2–6 read-only mapping subagents in ONE turn (concurrent), each pinned to a single subsystem.
 The point of the strict schema is to force `file:line` grounding so the plan can't drift into fiction.
 
-Per-agent instruction shape (the first four lines are the shared preamble from
+Per-agent instruction shape (the five lines below are the shared preamble from
 `references/run-ledger-and-supervision.md` — a subagent inherits none of your context):
 
 > READ `<run>/LEDGER.md` FIRST — this run's goal, constraints, and already-verified facts. Do not
 > re-derive what it states.
 > WRITE your full output to `<run>/agents/map-<subsystem>.json`; APPEND a heartbeat line to
 > `<run>/agents/map-<subsystem>.progress` at each milestone (started / read <file> / N claims /
-> writing). BUDGET ~25 tool calls — on hitting it, emit `"status":"partial"`, name what you did not
-> reach, and stop. RETURN only the path, `status`, and a ≤3-line summary.
+> writing). BUDGET ~25 tool calls — on hitting it, emit `"status":"partial"`, open `statusNote`
+> with `budget:`, name what you did not reach, and stop. RETURN only the path, `status`, and a ≤3-line summary.
 >
 > You are mapping ONE subsystem for a change. READ-ONLY — do not edit anything outside your own two
 > files above. Trace `<subsystem>` and report exactly how it works today, with `file:line` for every
@@ -29,7 +29,7 @@ Output schema:
   "status": "complete | partial | blocked",
   "statusNote": "what went uncovered, or what blocked it",
   "howItWorksToday": [ { "claim": "...", "cite": "path/to/file.ts:120-134" } ],
-  "entryPoints": [ "file:line" ],
+  "entryPoints": [ "file:line — every path into the changed behavior; flag each parallel-path left on the old logic" ],
   "invariantsObserved": [ "a product rule, a deployment identifier, a testing convention — each with a file:line cite" ],
   "risksForThisChange": [ "..." ],
   "openQuestions": [ "..." ] }
@@ -42,7 +42,11 @@ surface as a "surprise" during implementation rather than as a missing map.
 
 Then **re-verify the 2 riskiest claims yourself** with a direct `Read` before trusting them —
 reader agents can miscite, and a plan built on a miscitation is worse than none. **Promote only what
-you verified into the ledger's `Ground truth`**; everything else stays in the mapper's file.
+you verified into the ledger's `Ground truth`**; everything else stays in the mapper's file. Read
+the decision record as well as the code: issue
+history, change descriptions, design notes, a decision log, earlier sessions. It does not replace
+the code. Write "no decision record" in the ledger if none exists. Do not re-open a settled
+decision.
 
 ## Formal RCA (bugs)
 
@@ -54,7 +58,9 @@ Do NOT read source first. Pull the **real failing artifact** and prove the trace
 - Grep the actual SDK/vendor headers for the real error semantics.
 
 Write the RCA to the scratchpad as `<NAME>-RCA.md`, with each step of the trace marked verified. The
-RCA doubles as the plan's foundation. Only after the root cause is proven do you author the fix plan.
+RCA doubles as the plan's foundation. Only after the root cause is proven do you author the fix
+plan. A source fix does not repair the data the
+defect already wrote. Repair that data, or say why it needs no repair.
 
 **Pin the repro before you fix.** The RCA must end with the exact sequence that reproduces the
 failure and the observed wrong value — run it and record the output *while the bug is still live*.

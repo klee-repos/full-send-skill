@@ -53,13 +53,20 @@ not a correctness requirement.
 Pick the 3–6 lenses that fit the change; give each attacker exactly one. Recurring lenses:
 
 - **regression / prior-shipped-behavior** — does this break something that currently works?
-- **security & blast-radius** — secret exposure, auth/ACL, over-broad scope, data loss.
+- **parallel-path** — does a second path into the behaviour still run the old logic? Name every
+  entry point. The common failure is a run that changes one entry point and leaves its siblings.
+- **security & blast-radius** *(fires on any change that touches authentication, authorisation,
+  secrets, or user data)* — secret exposure, auth/ACL, over-broad scope, data loss.
 - **e2e-contract / determinism** — does the validation actually pin the claim? flaky/racey? does the
   test assert real state or a mock?
 - **grounding-reality** — are the plan's factual premises true against real code/data? miscitations?
+- **vacuous-pass** — can this check fail at all? Name the input that makes it go red. A check
+  with no such input proves nothing. Replace that check; do not re-run it.
 - **scope-coherence** — internal contradictions; does the plan do what the user asked and no more?
 - **native-timing / lifecycle** — mount/unmount, animation, permission dialogs, autoplay gates.
 - **cost / metering / irreversibility** — billable or one-way actions taken before proof.
+- **supply-chain** *(fires on a dependency change)* — a new dependency, an upgraded dependency, a
+  lockfile change, a build-tool change. What does the new code run at install time?
 - **test-integrity / no-fake-green** *(universal — fire on ANY change that adds or edits tests)* —
   attack every new/edited test and its seam. Assert the sink is a **sanctioned mechanism** (a
   recorded/replayed tape or a live call — never a stub that returns success) and the assertion pins
@@ -149,77 +156,55 @@ Use when the `Workflow` tool is available. This is the canonical pipeline shape 
 verifies as soon as its lens returns; no barrier until synthesis):
 
 ```js
-export const meta = {
-  name: 'adversarial-review',
-  description: 'Attack -> verify(default REFUTED) -> synthesize over a plan or a diff',
-  phases: [{ title: 'Attack' }, { title: 'Verify' }, { title: 'Synthesize' }],
-}
-const RUN    = '<abs path to the run directory>'   // holds LEDGER.md and agents/
-const TARGET = '<abs path to the plan file OR a diff/dir to attack>'
-const GROUND = '<abs path(s) to ground-truth the attackers must read: real source, the RCA, specs>'
-const ROUND  = 'R1'
+export const meta = { name: 'adversarial-review', phases: [{title:'Attack'},{title:'Verify'},{title:'Synthesize'}],
+  description: 'Attack -> verify(default REFUTED) -> synthesize over a plan or a diff' }
+const RUN='<run dir>', TARGET='<the plan file, or the diff to attack>', GROUND='<real source, RCA, specs>', ROUND='R1'
 const LENSES = [ /* {key, brief} — one failure lens each, per the catalog */ ]
-// ATTACK_SCHEMA / VERIFY_SCHEMA / SYNTH_SCHEMA: paste the three objects from "JSON schemas" above.
-// Shared preamble — a subagent inherits nothing, so every prompt carries it (see run-ledger doc).
-// The synthesize call below carries a trimmed variant, for the reason stated at its call site.
-const HEAD = (out) =>
-  `READ ${RUN}/LEDGER.md FIRST — it is this run's shared ground truth and constraints; do not `+
-  `re-derive what it states, do not violate a Constraint, and do not re-raise a claim listed as `+
-  `already refuted. Append a heartbeat line to ${out}.progress at each milestone. Write your full `+
-  `output to ${out}. Budget ~25 tool calls; on hitting it emit status:"partial" and stop.\n`
+// HEAD(out) = the five lines from references/run-ledger-and-supervision.md, as a string, in EVERY
+// prompt: read the ledger first; write <out> incrementally; heartbeat; budget; return a receipt.
 
-phase('Attack')
-const results = await pipeline(
-  LENSES,
-  (lens) => agent(
-    HEAD(`${RUN}/agents/${ROUND}-attack-${lens.key}.json`) +
-    `Hostile expert reviewer. Attack ${TARGET} through ONLY this lens: ${lens.brief}. `+
-    `READ ${GROUND} first. Cite file:line for every objection. Do NOT invent problems already handled. `+
-    `A few load-bearing findings beat many nitpicks.`,
-    { label: `attack:${lens.key}`, phase: 'Attack', schema: ATTACK_SCHEMA, effort: 'high' }
-  ).then(r => ({ lens, ranToEnd: r?.status === 'complete',
-                 findings: (r?.findings||[]).map(f => ({ ...f, lens: lens.key })) }),
-         () => ({ lens, ranToEnd: false, findings: [] })),
-  (attacked) => parallel(attacked.findings.map(f => () =>
-    agent(
-      HEAD(`${RUN}/agents/${ROUND}-verify-${f.id}.json`) +
-      `Re-litigate ONE finding. DEFAULT verdict REFUTED unless you can build a concrete reachable `+
-      `failure from real code (read ${GROUND}). Also reject the fix if it would regress prior behavior.\n`+
-      `FINDING(${f.lens}/${f.severity}): ${f.title}\nEvidence: ${f.evidence}\nBreak: ${f.breakScenario}\nFix: ${f.proposedFix}`,
-      { label: `verify:${f.id}`, phase: 'Verify', schema: VERIFY_SCHEMA, effort: 'high' }
-    ).then(v => (v?.verdict ? { ...f, ...v } : { ...f, verdict: null }), () => ({ ...f, verdict: null }))
-  )).then(vs => ({ lens: attacked.lens, ranToEnd: attacked.ranToEnd, verified: vs }))
-)
+phase('Attack')                        // pipeline, NOT parallel: each finding verifies as its lens returns
+const results = await pipeline(LENSES,
+  lens => agent(HEAD(`${RUN}/agents/${ROUND}-attack-${lens.key}.json`) +
+      `Hostile expert reviewer. Attack ${TARGET} through ONLY this lens: ${lens.brief}. READ ${GROUND} `+
+      `first. Cite file:line for every objection. Do NOT invent problems already handled.`,
+      { label:`attack:${lens.key}`, phase:'Attack', schema: ATTACK_SCHEMA, effort:'high' })
+    .then(r => ({ lens, ranToEnd: r?.status==='complete',
+                  findings: (r?.findings||[]).map(f => ({...f, lens: lens.key})) }),
+          () => ({ lens, ranToEnd:false, findings:[] })),
+  attacked => parallel(attacked.findings.map(f => () =>          // a FRESH agent per finding
+    agent(HEAD(`${RUN}/agents/${ROUND}-verify-${f.id}.json`) +
+        `Re-litigate ONE finding. DEFAULT verdict REFUTED unless you can build a concrete reachable `+
+        `failure from real code (read ${GROUND}). Also reject the fix if it would regress prior behavior.\n`+
+        `FINDING(${f.lens}/${f.severity}): ${f.title}\nEvidence: ${f.evidence}\nFix: ${f.proposedFix}`,
+        { label:`verify:${f.id}`, phase:'Verify', schema: VERIFY_SCHEMA, effort:'high' })
+      .then(v => ({...f, ...v}), () => ({...f, verdict:null}))
+  )).then(vs => ({ lens: attacked.lens, ranToEnd: attacked.ranToEnd, verified: vs })))
+
 const lensRuns = results.filter(Boolean)
-const ranOk = new Set(lensRuns.filter(r => r.ranToEnd).map(r => r.lens.key))
-// A lens that did not run to its end — or that vanished from the pipeline entirely — is a HOLE in
-// coverage, not a clean lens. Derive from LENSES, not from what came back: a lens whose whole chain
-// threw leaves no result to notice missing. Re-run it narrower or cover it yourself.
-const deadLenses = LENSES.map(l => l.key).filter(k => !ranOk.has(k))
-const raw = lensRuns.flatMap(r => r.verified).filter(Boolean)
-const DECIDED = new Set(['CONFIRMED', 'PARTIAL', 'REFUTED'])
-// A verifier that died or returned unusable output leaves its finding UNVERIFIED — never a free pass.
-const survivors  = raw.filter(f => f.verdict === 'CONFIRMED' || f.verdict === 'PARTIAL')
-const refuted    = raw.filter(f => f.verdict === 'REFUTED')
+const ranOk    = new Set(lensRuns.filter(r=>r.ranToEnd).map(r=>r.lens.key))
+// Derive dead lenses from LENSES, never from what came back: a lens whose whole chain threw leaves
+// no result to notice missing. A lens that did not run to its end is UNCOVERED, not clean.
+const deadLenses = LENSES.map(l=>l.key).filter(k => !ranOk.has(k))
+const raw        = lensRuns.flatMap(r=>r.verified).filter(Boolean)
+const DECIDED    = new Set(['CONFIRMED','PARTIAL','REFUTED'])
+// `!== 'REFUTED'` is NOT the survivor test: a dead verifier would promote an unadjudicated claim.
+const survivors  = raw.filter(f => f.verdict==='CONFIRMED' || f.verdict==='PARTIAL')
+const refuted    = raw.filter(f => f.verdict==='REFUTED')
 const unverified = raw.filter(f => !DECIDED.has(f.verdict))
 
-phase('Synthesize')
+phase('Synthesize')                    // HEAD too: the synthesizer is a supervised agent like the rest
 const verdict = await agent(
-  // Deliberately NOT HEAD: this agent's deliverable is the returned object, not a file, so the
-  // output-path/heartbeat/budget lines do not apply. It still reads the ledger — `summaryForUser`
-  // is the prose the user actually reads, and it is the last prose written before the gate closes.
-  `READ ${RUN}/LEDGER.md FIRST. Write summaryForUser, droppedNote and every exactPlanEdit to its `+
-  `Style entry; copy quoted values and file:line cites verbatim.\n`+
-  `Dedupe+rank survivors most-severe-first; emit an exact edit per survivor; separate architectural `+
-  `from detail; issue GO/GO-WITH-PATCHES/NO-GO.\n`+
-  `Echo these counts verbatim, do NOT recompute: rawCount=${raw.length}, survivorCount=${survivors.length}. `+
-  `${refuted.length} findings were REFUTED and dropped before you saw them. `+
-  `${unverified.length} had a dead or unusable verifier and are UNVERIFIED — neither survivor nor `+
-  `refuted; state that count in droppedNote. These lenses never ran to completion and are UNCOVERED, `+
-  `not clean — name them in droppedNote too: ${JSON.stringify(deadLenses)}.\n`+
-  `SURVIVORS:\n${JSON.stringify(survivors, null, 2)}`,
-  { label: 'synthesize', phase: 'Synthesize', effort: 'high', schema: SYNTH_SCHEMA }
-)
+  HEAD(`${RUN}/agents/${ROUND}-synthesize.json`) +
+  `READ ${RUN}/LEDGER.md FIRST; write every prose field to its Style entry, quoting values verbatim.\n`+
+  `Dedupe+rank survivors, emit an exact edit each, separate architectural from detail, issue `+
+  `GO/GO-WITH-PATCHES/NO-GO.\n`+
+  `Echo verbatim, do NOT recompute: rawCount=${raw.length}, survivorCount=${survivors.length}. `+
+  `${refuted.length} were REFUTED and dropped before you saw them. `+
+  `${unverified.length} had a dead verifier and are UNVERIFIED — neither survivor nor refuted. `+
+  `These lenses never completed and are UNCOVERED, not clean: ${JSON.stringify(deadLenses)}. `+
+  `Name both in droppedNote.\nSURVIVORS:\n${JSON.stringify(survivors,null,2)}`,
+  { label:'synthesize', phase:'Synthesize', effort:'high', schema: SYNTH_SCHEMA })
 return { survivors, unverified, deadLenses, verdict }
 ```
 
@@ -263,6 +248,11 @@ at spawn, poll, kill no-progress agents, close with every member accounted for.
    re-run or spot-check that one yourself, never fold it in. This is the stage where a stall is most
    expensive: 20 findings means 20 agents, and the ones that quietly never return are exactly the
    ones nobody misses.
+
+   An agent that returns nothing AND wrote no output file is **born-dead**: it died in transport,
+   not in its prompt. Retry it once, unchanged — the one narrow exception to the never-re-prompt
+   rule. Re-spawn only the born-dead members, never the whole wave. Measured: 89 of 180 terminal
+   subagent deaths made zero tool calls, and they cluster in waves.
 3. **Synthesize turn:** one subagent (or do it yourself) dedupes/ranks survivors, emits exact edits,
    issues GO/GO-WITH-PATCHES/NO-GO. If you spawn a subagent, hand it the raw-finding count, the
    survivor count, and the uncovered-lens list explicitly — it sees only survivors and would
@@ -276,6 +266,13 @@ the attackers serially in the foreground. On the do-it-yourself synthesize branc
 
 - **Independently spot-verify the top ~2 survivors** against real source. Reviewer agents can
   miscite; the highest-stakes edits deserve your own eyes.
+- **Compute the survival rate, then gate on it** — `survivorCount / rawCount`. The synthesizer
+  holds both counts. Write the rate to the ledger. The test is two-sided, because both ends are a
+  smell. When the rate is above 65%, the verifiers rubber-stamped: do not emit GO; re-verify the top
+  survivors with a second fresh verifier and record both rates. When it is under 40%, the attackers
+  produced noise or the verifiers refused everything: re-read two REFUTED findings yourself before
+  you accept the round. EXCEPTION: a round auditing for absence runs high by design (see "Why it
+  works") — say so in `droppedNote`.
 - **Record refuted claims in the ledger's `Decisions`**, not just the survivors. R2's attackers read
   that file; without it they re-raise what R1 already killed, and the review loops without
   converging — the single most common way this phase burns rounds on no progress.

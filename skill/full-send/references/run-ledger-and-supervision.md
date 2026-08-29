@@ -1,19 +1,8 @@
 # Run ledger & agent supervision
 
-Every fan-out phase in this skill depends on two things that are easy to lose and expensive to lose
-quietly: **shared state** and **liveness**.
-
-State kept only in the orchestrator's context never reaches the agents at all — each one starts
-empty, re-derives ground truth from scratch, drifts to a slightly different picture of reality, and
-the round that follows is assembled from N inconsistent worlds. The same state is also the first
-thing a compaction takes, so a long run forgets its own constraints mid-pipeline.
-
-Liveness fails the other way. An agent that hangs looks exactly like one that is thinking, and an
-agent that died looks exactly like a lens that found nothing. Both emit no signal, so both read as
-*clean*. That is this pipeline's quietest failure: a confident report whose coverage is missing
-members nobody counted.
-
-Two invariants close them:
+Every fan-out phase loses two things quietly. State kept only in your context never reaches the
+agents, and a compaction takes it first. A hung agent and a dead agent both emit no signal, so both
+read as *clean*. Two invariants close them:
 
 1. **State lives in files. Your context is a cache of those files, never the system of record.**
 2. **Every spawned agent is supervised until it is accounted for.**
@@ -28,9 +17,9 @@ Two invariants close them:
 
 ## The run directory
 
-Created in **Step 0, before the first agent is spawned** — not when the first artifact happens to
-need a home. Locate it in this order: the harness-provided scratchpad if one exists; else
-`/tmp/full-send-<slug>/`; else any writable dir outside the repo. **Never the repo tree, never
+Created in **Step 0, before the first agent is spawned**. Locate it in this order: the
+harness-provided scratchpad if one exists; else `/tmp/full-send-<slug>/`; else any writable dir
+outside the repo. Add a unique suffix to that fallback path. **Never the repo tree, never
 git-committed** — all of it is scratch.
 
 ```
@@ -49,11 +38,9 @@ git-committed** — all of it is scratch.
 One `MANIFEST.jsonl` line per agent, appended **at spawn time**, not at return:
 
 ```json
-{"id":"attack-regression","phase":"adversarial-R1","brief":"regression lens","out":"agents/adversarial-R1-regression.json","status":"spawned"}
+{"id":"attack-regression","phase":"adversarial-R1","brief":"regression lens","status":"spawned",
+ "out":"agents/adversarial-R1-regression.json"}
 ```
-
-What is not recorded cannot be noticed missing. A wave of six where five return reads as complete
-unless something written down says six were expected.
 
 ## LEDGER.md — the shared brief
 
@@ -64,31 +51,32 @@ unless something written down says six were expected.
 ## Style        the writing standard for every prose field — the rules copied out, never a pointer to them
 ## Phase        current phase; which gates are cleared
 ## Ground truth VERIFIED facts only, each with file:line
-## Decisions    settled forks + why — INCLUDING claims already refuted, so no later wave re-raises them
+## Decisions    settled forks + why — INCLUDING refuted claims, so no later wave re-raises them
 ## Artifacts    paths: RCA, plan, adversarial JSON, proof records, driver command
-## Open         what is still unknown or uncovered
+## Workspace    the paths this run may write; the paths it must not; how the work reaches its destination; how to get back to the start state, or the words `no undo path`; the disposable store or test account this run may operate, or the word `none`
+## Items        per-item state when the request names several items; the whole record with no tracker
+## Capabilities one line per orchestration primitive: available, or blocked and by what
+## Hold         the phase after which the user wants to look; the run stops there
+## Cost ceiling agents per wave, waves, wall clock; and the returns to Step 3 you have used
+## Stop set     for an open-ended request: the concrete changes it covers, frozen after Step 1
+## Open         what is still unknown or uncovered; and any scope you narrowed, written down
 ```
 
 Rules that make it trustworthy:
 
-- **You are the only writer.** Agents read it and write their own files. Concurrent writers corrupt
-  it, and a corrupted shared brief poisons every agent downstream at once.
-- **Update it at every phase boundary, and before spawning the next wave** — after folding survivors,
-  after re-verifying a claim, after a constraint is discovered. A stale ledger is worse than no
-  ledger, because agents will trust it.
-- **Only verified facts reach `Ground truth`** — something you `Read` yourself, or an agent claim you
-  spot-checked. Unverified agent claims stay in the agent's own file until they earn promotion.
-- **It is a brief, not a transcript.** Keep it readable in ~30 seconds; link to files for depth. A
-  ledger too long to read stops being read, which is the same as not having one.
-- **`Style` is copied out in full, never referenced.** A subagent reads this file, not `SKILL.md` — a
-  pointer it will not follow is not a transmitted rule, and "see `SKILL.md`" written into this row is
-  the failure, not the rule. Copy the whole of `SKILL.md` § Writing standard into it: the rule list
-  **and** the paragraph naming what is exempt. The exemption is the half that protects quoted values
-  and `file:line` cites, so a copy that drops it is worse than no copy. This is fixed boilerplate of a
-  known size, so it does not compete with the 30-second read the way a growing section would.
-- **Refuted claims are load-bearing.** Recording them is what stops round R2's attackers from
-  re-litigating exactly what R1 already killed — the most common form of a loop that spins without
-  progressing.
+- **You are the only writer.** Agents read it and write their own files.
+- **Update it at every phase boundary, and before spawning the next wave.**
+- **Only verified facts reach `Ground truth`** — something you `Read` yourself, or an agent claim
+  you spot-checked. An unverified claim stays in the agent's own file until it earns promotion.
+- **It is a brief, not a transcript.** Keep it readable in ~30 seconds; link to files for depth.
+- **`Style` is copied out in full, never referenced.** A subagent reads this file, not `SKILL.md`.
+  Copy the whole of `SKILL.md` § Writing standard: the rule list **and** the paragraph naming what
+  is exempt. The exemption protects quoted values and `file:line` cites.
+- **Refuted claims are load-bearing.**
+- **A row is at most 5 lines, and you create a row only when it applies.**
+- **`Workspace` records the fence; it never shrinks the fix.** When ground truth shows the change
+  needs a path the row does not list, add the path, say so in the ledger and in your next reply,
+  then go on.
 
 ## The five lines every agent prompt carries
 
@@ -96,23 +84,23 @@ A subagent inherits none of your context, so these travel *inside* every spawned
 attacker, verifier, synthesizer, driver:
 
 1. **READ `<run>/LEDGER.md` FIRST.** It is this run's shared ground truth. Do not re-derive what it
-   already states, do not propose anything that violates a listed Constraint, and write every prose
-   field you emit — claims, findings, notes, `statusNote` — to its `Style` entry.
-2. **WRITE your full output to `<run>/agents/<phase>-<key>.json`.** That file is your deliverable.
-   (Read-only agents are read-only *on the project* — their own two files under `agents/` are the
-   only writes they may make.)
+   states. Do not violate a listed Constraint. Write every prose field you emit — claims, findings,
+   notes, `statusNote` — to its `Style` entry.
+2. **WRITE your output to `<run>/agents/<phase>-<key>.json` AS YOU GO.** Create it at the first
+   milestone with `"status":"partial"`. Rewrite it after every new finding. Set
+   `"status":"complete"` on the last write. A long final emit is how these agents die. Most agent
+   deaths land on a transport error, and many arrive before the agent's first tool call. Read-only
+   agents are read-only *on the project*; their two files under `agents/` are their only writes.
+   **Write no scratch file** there — the orchestrator collects that directory by glob.
 3. **APPEND a heartbeat line to `<run>/agents/<phase>-<key>.progress` at every milestone** — started,
-   read <file>, found N candidates, verifying, writing output. This is how you are known to be alive:
-   an agent with no new line across two checks is treated as hung and killed.
+   read <file>, found N candidates, verifying, writing output. An agent with no new line across two
+   checks is treated as hung and killed. Each line carries the finding itself, not only a step name.
 4. **BUDGET: ~<N> tool calls / <M> files.** On hitting it, write what you have with
-   `"status":"partial"`, note what went uncovered, and stop. Do not keep searching for a better
-   answer past the budget.
+   `"status":"partial"`, open `statusNote` with `budget:`, name what went uncovered, and stop. That
+   prefix is what tells the orchestrator you finished on your budget and did not die. Do not keep
+   searching for a better answer past the budget.
 5. **RETURN only** the output path, your `status`, and a ≤3-line summary. The file is the
    deliverable; your reply is a receipt.
-
-The receipt rule is not tidiness. Six agents returning 4KB of JSON each is precisely what pushes the
-orchestrator into a compaction mid-round — the event that loses the run. Files survive compaction;
-returned blobs are what causes it.
 
 ## `status` is a required field, everywhere
 
@@ -123,14 +111,10 @@ Add to every schema this skill defines (attack, verify, synthesize, mapping, e2e
 "statusNote": { "type": "string", "description": "what went uncovered, or what blocked it" }
 ```
 
-Without it, `{"findings": []}` from an agent that died is indistinguishable from a lens that
-genuinely found nothing — and *empty output silently increases confidence*. `complete` means the
-work actually ran to its end. **Absent output is never `complete`.**
-
-The accounting rule, which generalizes the verifier rule already in
-`references/adversarial-review.md`: **absent, malformed, or blocked output is `unverified` — never a
-pass, and never a clean bill of health.** Re-run it once, narrower; if it fails again, do that slice
-yourself and say so.
+Without it, *empty output silently increases confidence*. `complete` means the work ran to its end.
+**Absent output is never `complete`.** **Absent, malformed, or blocked output is `unverified`** —
+never a pass, never a clean bill of health. Re-run it once, narrower. If it fails again, do that
+slice yourself and say so.
 
 ## The supervision loop
 
@@ -139,44 +123,66 @@ unrelated work and wait to be notified. Supervise it:
 
 1. **Record at spawn.** Append every agent's `MANIFEST.jsonl` line as you spawn it.
 2. **Poll on a bounded interval.** Each check reads two cheap things: which `agents/*.json` outputs
-   now exist, and the tail of each `.progress`. Mechanism, first available — `TaskList`/`TaskGet` for
-   liveness, `TaskOutput` for a partial, `Monitor` for an until-condition, `TaskStop` to kill,
-   `SendMessage` to continue one with its context intact; load them via `ToolSearch` if deferred. No
-   task tools at all? Poll the progress files directly. The heartbeat files are the mechanism-
-   independent signal — they work when nothing else is loaded.
+   now exist, and the tail of each `.progress`. Use your harness's task tools where it has them —
+   liveness, a partial read, an until-condition, a kill, a message to continue one agent — and load
+   them if they are deferred. With no task tools, poll the progress files directly. Print one
+   liveness line per poll: the live agents, the elapsed time, and each one's last milestone.
 3. **Classify every agent on every check:**
-   - **done** — its output file exists and parses.
-   - **working** — a new `.progress` line since your last check.
-   - **stalled** — alive, but no new progress line across two consecutive checks. That is a loop
-     with no progress. Kill it (`TaskStop`). Do not wait one more round, and do not nudge it with the
-     same prompt — same input, same loop.
-   - **dead** — the task ended and no output file exists.
-4. **Handle stalled/dead once, then absorb it.** Re-spawn exactly once with a *narrower* scope, a
-   smaller budget, and the specific sub-question (never a wider scope "so it can finish" — unbounded
-   scope is what stalls agents). If the retry fails too, do that slice yourself in the main thread and
-   record it as covered-by-orchestrator.
+   - **done** — its output file exists, it parses, and its status is complete. A partial file
+     belongs to a live agent, not a done one.
+   - **working** — a new `.progress` line that carries a finding, and no class below fires.
+   - **grinding** — 3 or more heartbeat lines that name a step and carry no finding. Kill it and
+     narrow it. Do not wait.
+   - **at-risk** — your harness reports it near its context limit, or its transcript is far larger
+     than its siblings'. Kill it and narrow it before it dies on its final write. When the harness
+     reports neither, this class does not fire, and `grinding` is the one you can read.
+   - **budget-capped** — the task ended, its `status` is `partial`, and its `statusNote` opens with
+     `budget:`. That is a finished agent that stopped where you told it to. Count the gaps the note
+     names as uncovered, and close it.
+   - **partial-dead** — the task ended and its `status` is not `complete`, with NO `budget:` prefix.
+     It died mid-work. Treat it exactly as `dead`: the slice is `unverified`, never a lens that ran.
+     Read its findings as leads only; they never enter a survival ratio. When you cannot tell the
+     two apart, it is `partial-dead` — an unclaimed budget stop is the cheaper mistake.
+   - **stalled** — alive, but no new progress line across two consecutive checks. Kill it
+     (`TaskStop`). Do not wait one more round, and do not nudge it with the same prompt.
+   - **dead** — the task ended and no output file exists, and it wrote at least one `.progress`
+     line, so it started work and then died.
+   - **born-dead** — the task ended, you did not kill it, and it wrote NO output file AND NO
+     `.progress` line. It died in transport, before its first milestone.
+4. **Handle stalled/dead once, then absorb it.** A **born-dead** agent you retry once, unchanged,
+   because it died in transport and not in its prompt. The
+   retry budget belongs to the slice, not to the agent — one retry total, and a re-spawned agent
+   gets none of its own. If more than half a wave is born-dead, stop the wave. The cause is transport,
+   not your prompt. Pause once, then re-spawn the born-dead members. That pause is a back-off
+   between spawns, never supervision by waiting. Otherwise re-spawn exactly once with a *narrower* scope, a smaller budget, and the
+   specific sub-question. Never widen the scope "so it can finish". If the retry fails, do that
+   slice yourself and record it as covered-by-orchestrator.
 5. **Close the wave explicitly.** Every manifest entry must end at `done`,
    `covered-by-orchestrator`, or `uncovered` **named in the phase summary**. Only then update
    `LEDGER.md` and move to the dependent stage. A missing member must never dissolve into a survival
    ratio or a coverage claim.
 
 **Wave-level stop:** if more than half a wave stalls, stop the wave and inspect your own prompt. The
-cause is nearly always shared — an unbounded search, a path that doesn't exist, a target the agents
-can't reach — and re-spawning six agents just repeats the same mistake six more times.
+cause is nearly always shared — an unbounded search, a bad path, an unreachable target.
+
+**Abort:** On a user interrupt or a stop instruction, act before you reply. Stop every live agent and
+confirm each stop. Kill your own background jobs. Write an `Aborted` ledger entry that names the
+phase, the artifacts on disk, and every outward action you already took.
 
 **Never:**
 
 - Fire-and-forget a wave and infer success from the members that happened to answer.
-- Re-prompt a stalled agent with its original prompt.
+- Re-prompt a stalled agent with its original prompt. ONE exception: a **born-dead** agent returned
+  nothing AND wrote no output file. Retry it once, unchanged. Re-spawn only the born-dead members;
+  a whole-wave restart kills healthy siblings and
+  truncates the partial files they wrote.
 - Widen scope to help a stalled agent finish.
 - Let an absent agent's silence pass as a clean lens.
 
 ## Macro-loop anti-stall
 
-The same disease at pipeline scale: re-running Step 8's loop against an unchanged reality and calling
-it iteration. A round only counts if it produced **new observed signal** — a different failure
-signature, a new observed value, a new `file:line`. Record per round in the ledger: what changed in
-the code, what the run observed, and how that differs from the previous round.
+A round counts only if it produced **new observed signal** — a different failure signature, a new
+observed value, a new `file:line`. Record per round what changed and what the run observed.
 
 - **Two consecutive rounds with the same failure signature = a stall, not progress.** Stop patching.
   Get new signal through a channel you have not read yet (a log, a state dump you add, a smaller
@@ -184,6 +190,5 @@ the code, what the run observed, and how that differs from the previous round.
 - **Three rounds with no new signal = stop and report honestly** what remains unproven, quoting the
   exact failure signature and what you tried.
 
-This does not contradict "loop is convergence, not a counter." Convergence still terminates only on a
-stable green-with-proof re-run. This bound applies to **non-convergence**, and its outcome is an
-honest unproven report — never a claimed pass.
+This bound applies to **non-convergence** only. Its outcome is an honest unproven report, never a
+claimed pass.
