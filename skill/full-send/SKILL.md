@@ -1,6 +1,6 @@
 ---
 name: full-send
-license: Apache-2.0
+license: PolyForm-Noncommercial-1.0.0
 metadata:
   version: 1.3.0
 description: >-
