@@ -34,6 +34,8 @@ survival rate to run high and discount it accordingly.
    - "Do not invent problems the code/plan already handles." Re-raising a risk the plan already
      mitigates adequately is noise; an *inadequate* mitigation is a valid finding — say why.
    - Prefer a few load-bearing findings over many nitpicks.
+   - Read the decision table in the plan's `## Review record`. You may attack a decision. Do not
+     raise again a fork the table settles, unless you bring new evidence.
 2. **VERIFY** — one **fresh** agent per raw finding. Default verdict **REFUTED**. It flips to
    CONFIRMED/PARTIAL only by constructing a concrete, reachable failing sequence from the real code
    (running a throwaway repro probe when useful). It **also assesses the proposed fix** and marks it
@@ -50,7 +52,9 @@ not a correctness requirement.
 
 ## Failure-lens catalog
 
-Pick the 3–6 lenses that fit the change; give each attacker exactly one. Recurring lenses:
+Pick the 3–6 lenses that fit the change; give each attacker exactly one. Gate A hands you leads:
+name each cross-lens theme from the plan's `## Review record` in the prompt of the attacker whose
+lens it fits. Recurring lenses:
 
 - **regression / prior-shipped-behavior** — does this break something that currently works?
 - **parallel-path** — does a second path into the behaviour still run the old logic? Name every
@@ -167,7 +171,9 @@ phase('Attack')                        // pipeline, NOT parallel: each finding v
 const results = await pipeline(LENSES,
   lens => agent(HEAD(`${RUN}/agents/${ROUND}-attack-${lens.key}.json`) +
       `Hostile expert reviewer. Attack ${TARGET} through ONLY this lens: ${lens.brief}. READ ${GROUND} `+
-      `first. Cite file:line for every objection. Do NOT invent problems already handled.`,
+      `first. Cite file:line for every objection. Do NOT invent problems already handled. `+
+      `Read the decision table in the plan's Review record: do not raise a settled fork again `+
+      `without new evidence.`,
       { label:`attack:${lens.key}`, phase:'Attack', schema: ATTACK_SCHEMA, effort:'high' })
     .then(r => ({ lens, ranToEnd: r?.status==='complete',
                   findings: (r?.findings||[]).map(f => ({...f, lens: lens.key})) }),
@@ -238,7 +244,8 @@ at spawn, poll, kill no-progress agents, close with every member accounted for.
 
 1. **Attack turn:** spawn the N attacker subagents (one `Agent`/`Task` call each, all in ONE
    message so they run concurrently), each with its single lens, the ground-truth paths to read, the
-   `file:line` mandate, and the "don't invent handled problems" rule. Each writes its `findings[]`
+   `file:line` mandate, the "don't invent handled problems" rule, and the rule on the plan's
+   decision table (no settled fork again without new evidence). Each writes its `findings[]`
    JSON to `<run>/agents/<round>-attack-<lens>.json`. Read the files, not the replies. A lens whose
    file is missing or whose `status` isn't `complete` is **uncovered** — re-spawn it once narrower,
    then run that lens yourself.
@@ -280,7 +287,8 @@ the attackers serially in the foreground. On the do-it-yourself synthesize branc
   either form, including the do-it-yourself branch. This gate is the most expensive phase in the
   pipeline and otherwise persists nothing: the file is what survives a compaction or a fresh
   session. Then fold each `survivorsRanked` entry into the plan as an edit.
-- Fold survivors into the plan via edits; mark it `ENG[+DESIGN]+ADVERSARIAL CLEARED`.
+- Fold survivors into the plan via edits; mark it `SCOPE+ENG[+DESIGN][+DX]+ADVERSARIAL CLEARED`.
+  The mark names the gate A lenses that ran.
 - On `NO-GO`, revise and **loop** — re-run the review, each round stricter about rejecting
   unreachable/theoretical findings, until a round lands nothing on the crash-causing invariants.
 - This same template applies standalone to any risky diff or bugfix, not just a plan — it's a general

@@ -14,7 +14,7 @@ Given a feature or bug, `full-send` runs (and loops) this pipeline without stopp
 1. **Ground truth** — for bugs, a formal RCA from real data (real DB rows, real logs, real traces) verified before reading source; for features, parallel read-only mapping agents that cite `file:line`.
 2. **Design lane** — for UI work only: reference research, then a cross-check against the project's design source of truth.
 3. **Plan** — written to a scratchpad (never the repo tree, never committed), with numbered fix sections and a test-coverage tree.
-4. **Review gate A** — engineering (+ design) review. Reads a delegated review skill's own file first and skips it when it declares an interactive gate, so the gate is autonomous and never halts on a sub-skill prompt; otherwise a built-in rubric fallback runs the same substance.
+4. **Review gate A: the plan review** — built in, with no other skill. Up to four lenses review the plan in order: scope (always), design (UI work), developer experience (developer-facing work), then engineering (always, last). Each lens gets two independent reviewers that read one frozen copy of the plan. The run decides every finding by six fixed principles and logs each decision. It never decides a change to the direction the user gave: that one goes to the user.
 5. **Review gate B: the adversarial review** (the signature move) — N single-lens attackers cite `file:line` → per-finding fresh verifiers that **default to REFUTED** → synthesize survivors into plan edits and a GO / GO-WITH-PATCHES / NO-GO verdict. Asymmetric skepticism is the anti-rubber-stamp mechanism.
 6. **Implement** — direct, single-threaded, in the main thread. Fan-out is for investigation and review, not for writing code.
 7. **Agentic end-to-end validation** — a deterministic assertion against the REAL running artifact (CLI binary, live endpoint, real user clicks on real screens). The LLM never decides pass/fail.
@@ -67,13 +67,13 @@ cp -R full-send-skill/skill/full-send ~/.claude/skills/full-send
 
 Then invoke it from a Claude Code session: ask for the pipeline by name (e.g. *"full-send this bugfix"*, *"plan → adversarial review → build → e2e, loop until verified"*).
 
-## Companion skills (referenced, not bundled)
+## Dependencies
 
-`full-send` is part of a larger skill set and references these companion skills by name. They are **optional** — the skill degrades gracefully when they're absent — but installing them unlocks the full pipeline:
+`full-send` needs no other skill. Every phase, the plan review included, is in this repository.
 
-- **`/autoplan`** — autonomous plan-review path (Gate A). `full-send` reads its skill file before invoking it and falls back to the built-in rubric in `references/plan-review-rubric.md` when it is absent, when it declares an interactive gate, or when its lens set does not fit the change's surface.
-- **`/plan-eng-review`**, **`/plan-design-review`** — interactive engineering and design review. Used directly only when a human is driving; otherwise autoplan or the rubric subagent runs their substance non-interactively.
-- **Mobbin MCP** (`mcp__mobbin__search_screens` / `search_flows`) — design inspiration for UI work. When absent, falls back to provided screenshots / the project's design source of truth.
+One integration is optional:
+
+- **Mobbin MCP** (`mcp__mobbin__search_screens` / `search_flows`) — design references for UI work. When it is absent, the skill uses the screenshots you give it and the design source of the project.
 
 **No QA skill sits on the E2E driver ladder, by design.** A QA skill that autonomously *fixes* what it finds takes ownership of a diff that is yours, and one that requires a clean git tree cannot run at Step 7 at all — Step 7 is reached with the whole implementation uncommitted. `full-send` drives the real artifact itself, or authors a harness out-of-tree.
 
@@ -89,7 +89,11 @@ skill/full-send/
     ├── agentic-e2e.md                    # deterministic-verdict principle, harness discovery, tier table
     ├── investigation-and-plan.md         # read-only ground-truth fan-out template + plan skeleton
     ├── limits-and-recovery.md            # rollback, plan invalidation, open-ended scope, push-back, cost ceiling, handoff
-    ├── plan-review-rubric.md             # eng-lens + design-lens checklists (Gate A fallback)
+    ├── plan-review.md                    # Gate A: lenses, passes, reviewer prompts, decision rules
+    ├── plan-lens-scope.md                # Gate A lens: premise, alternatives, scope, failure and rollout
+    ├── plan-lens-eng.md                  # Gate A lens: architecture, code quality, tests, performance
+    ├── plan-lens-design.md               # Gate A lens: hierarchy, states, journey, generic-design checks
+    ├── plan-lens-dx.md                   # Gate A lens: time to a first result, interface, errors, docs
     └── run-ledger-and-supervision.md     # file-backed shared state + agent liveness/stall handling
 ```
 

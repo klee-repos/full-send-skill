@@ -187,6 +187,7 @@ claim, write to `<run>/proof/` and summarize in the reply:
 - each stated requirement, mapped to its own proof line; where the requirement is about what a
   person perceives, that line records an observation of the real output, in addition to the
   deterministic assertion and never in place of it — not a check that a locator resolved;
+- each row of the plan's `E2E drive list`, mapped to a proof line or named as uncovered;
 - what was driven — build/version marker, target (URL/port/device/path), entry state;
 - the raw observed value behind each assertion, quoted, never paraphrased;
 - both halves of red/green, and what was reverted to force the red;

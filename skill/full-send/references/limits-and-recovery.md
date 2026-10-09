@@ -38,7 +38,8 @@ the goal out of reach. A hard step is not a wrong plan. Two invalid steps in one
 
 Then stop the implementation. Write the fact and its `file:line` to the ledger. Re-enter Step 3.
 Re-run gate A **and gate B** on the changed sections: implementation code waits for the
-`ENG[+DESIGN]+ADVERSARIAL CLEARED` mark, the same as on the first pass. Patching on is wrong,
+`SCOPE+ENG[+DESIGN][+DX]+ADVERSARIAL CLEARED` mark, the same as on the first pass. Gate A names
+the lens that owns each changed section (`plan-review.md` § A re-run). Patching on is wrong,
 because the gates approved the old plan and later proof would cover an unreviewed one.
 
 **The return never yields the turn**, and it is bounded. Return to Step 3 at most twice in one run,
@@ -73,9 +74,11 @@ start it. Push-back never buys a skipped proof, and never ends the run.
 
 At Step 0 write a **cost ceiling** to the ledger: a maximum agent count PER WAVE, a maximum wave
 count, and a wall-clock limit. Use the user's numbers. Else set it from the change: one surface and
-one file, 8 agents per wave, 4 waves, 30 minutes; a stated feature or bug, 12 agents per wave, 8
-waves, 2 hours. A **wave** is one set of agents you spawn in one message. A gate B
-round is three waves, so the lower figure buys one round and one wave more. Raise it only when a
+one file, 8 agents per wave, 7 waves, 90 minutes; a stated feature or bug, 12 agents per wave, 12
+waves, 4 hours. A **wave** is one set of agents you spawn in one message. The lower figure buys one
+mapping wave, gate A in one wave, one gate B round of three waves, and two waves for a retry or a
+second eng read. The higher figure buys one mapping wave, gate A in up to three waves, two gate B
+rounds, and two retry waves. Raise it only when a
 phase you already ran shows you must. The wall-clock limit is a reporting mark, not a stop: when the run crosses it, write the
 elapsed time and the remaining items to the ledger `Open` row, and go on.
 
@@ -94,3 +97,7 @@ At Step 9 write a **Handoff pack** to `<run>/HANDOFF.md`, and name that path in 
 It holds the request as stated, the change list with a reason each, the proof record path and its
 verdict line, what stays uncovered, the not-reversible effects with their rollback step, and the
 reviewer's open questions. One page, for a reader who did not watch the run.
+
+Gate A supplies the open questions. Copy them from the plan's `## Review record` and its
+`NOT in scope` list: each `taste` decision with its rejected option, each deferred item with its
+reason, each push-back, and each `direction` change the run did not ask.

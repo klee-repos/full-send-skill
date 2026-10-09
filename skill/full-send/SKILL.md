@@ -2,11 +2,12 @@
 name: full-send
 license: PolyForm-Noncommercial-1.0.0
 metadata:
-  version: 1.4.0
+  version: 1.5.0
 description: >-
   Run the full delivery pipeline end-to-end and autonomously, in order: ground-truth investigation
-  (formal RCA from real data for bugs), a scratchpad plan, plan review via /autoplan or
-  /plan-eng-review (plus /plan-design-review and Mobbin research for UI work), ADVERSARIAL REVIEW
+  (formal RCA from real data for bugs), a scratchpad plan, a built-in multi-lens PLAN REVIEW (scope
+  and engineering always; design plus Mobbin research for UI work; DX for developer tools),
+  ADVERSARIAL REVIEW
   (bespoke attack, then verify-default-REFUTED, then synthesize), direct implementation, then
   AGENTIC END-TO-END validation on the REAL app with real user clicks and deterministic verdicts,
   looping until green-with-proof and no regressions. FIRES when the user wants that arc, however
@@ -46,9 +47,8 @@ observed state through a deterministic verdict the LLM did not author.**
 - **Escalate rarely and only for genuine forks.** Use `AskUserQuestion` ONLY when a *scope or
   architecture* decision is genuinely the user's to make and you cannot resolve it from the request,
   the code, or the sessions — always with a recommended default. Judge by the *decision*, never by
-  the fact that some sub-skill popped a question. Never relay a sub-skill's housekeeping prompts
-  (onboarding, telemetry opt-in, its own scope-challenge menus, mockup ceremony) to the user —
-  self-answer those.
+  the fact that some tool or skill popped a question. Never relay another skill's housekeeping
+  prompts (onboarding, telemetry opt-in, its own menus) to the user — self-answer those.
 - **Never batch clarifying questions.** One sharp question beats five.
 - **Respect blunt overrides.** "Spike then full-send, don't ask me" means exactly that.
 - **Observe before you answer.** A question about observable behaviour needs an observation, not a
@@ -180,6 +180,9 @@ Detect whether the change has a **UI/design surface**. If it does, this lane is 
 - **Inspiration:** use the **Mobbin MCP** (`mcp__mobbin__search_screens` / `search_flows`) with 3–8
   narrow queries for the *specific* pattern. Synthesize a named reference set and one concrete,
   ownable direction.
+- **Write it down.** At Step 3, put the reference set, the direction, and the path of each image
+  the user gave into the plan's `## Design` section. Gate A's design reviewer starts with empty
+  context: it reads that section, and nothing you only hold in yours.
 - **Cross-check** against the project's design source of truth (a `design.md`, a token file, brand
   refs). If code and a stale doc disagree, code wins.
 - **MCP may be deferred or absent.** Before first use: if the tool is in the deferred list,
@@ -203,34 +206,36 @@ proof from render/nav) — substituting the tiers this project actually has; mig
 and risks. Use `AskUserQuestion`
 here only to lock a genuine scope/architecture fork.
 
-## Step 4 — Review gate A (engineering + design lenses)
+## Step 4 — Review gate A (the plan review)
 
-Run it **autonomously** — never hand a sub-skill's own prompts to the user.
+**The procedure, the prompts, the schema and the decision rules are in `references/plan-review.md`
+— read it before you run this gate.** The gate is native: it calls no other skill.
 
-Priority ladder (use the first that applies):
+- **Four lenses, one file each.** `scope` and `eng` always run. `design` runs when the plan has a UI
+  surface. `dx` runs when the plan has a developer-facing surface. Each reviewer subagent reads its
+  own lens file, `references/plan-lens-<lens>.md`. You do not paste the checklist.
+- **Two independent reviewers for each lens:** a checklist reviewer and a challenger. Both read one
+  frozen snapshot of the plan. Neither reads the other's output.
+- **Ordered passes.** Scope, then design and DX, then eng. The eng lens runs last, so it reviews the
+  plan that gate B and Step 6 receive. A plan whose fixes touch one file runs every lens in one
+  wave.
+- **You decide every finding** by the six principles. Class it `mechanical`, `taste` or
+  `direction`, and log it in the plan at once. A decision replaces the user's answer. It never
+  replaces the analysis.
+- **You never decide a `direction` change.** That is a change to what the user stated, which both
+  reviewers want. The user's direction stands. Ask it as the `AskUserQuestion` scope fork, after
+  the last pass.
+- **Each pass closes before the next one opens:** fold, read the whole plan body again, write the
+  pass line.
 
-1. **PREFERRED — `/autoplan` if installed.** It runs the eng/design review skills at full depth and
-   auto-decides every intermediate question, surfacing only genuine taste/product forks at one final
-   gate. Read its skill file before you invoke it; this document is not evidence, the file is.
-   Skip it, uninvoked, when the file is absent, when it declares an interactive gate, or when its
-   lenses miss this change's surface. Record which check failed.
-2. **FALLBACK — the rubric subagent** (`references/plan-review-rubric.md`). Use this whenever:
-   `/autoplan` is absent; **or** an invoked review skill reports `BLOCKED — AskUserQuestion
-   unavailable`; **or** it otherwise stalls on interactivity it can't resolve. Do not count on a
-   sub-skill's own non-interactive mode — those are typically gated on an orchestrator-specific
-   env var that is unset in an ordinary session, so the skill takes its interactive path and halts.
-   Run the eng-lens checklist always
-   and the design-lens checklist for UI work, via a subagent, never touching the interactive skill.
-   Run **both** lenses on UI work.
-3. **Only if the user explicitly asked to drive the plan review themselves** — invoke
-   `/plan-eng-review` / `/plan-design-review` directly and let them ask. This is "Respect blunt
-   overrides" applied to gate A.
+Run it **autonomously.** **Gate A must never halt the pipeline:** it does not stop at a pass
+boundary. It can cause two yields only: an open `direction` question, and a ledger `Hold` row that
+names the gate. Only when the user explicitly asks to drive the plan review do you ask where the
+autonomous run decides. This is "Respect blunt overrides" applied to gate A.
 
-Absent that explicit request, **gate A must never halt the pipeline.**
-
-Fold findings back into the plan until the gate is CLEAR. Before you fold a **high-severity or
-scope-changing** finding, spot-verify it against real source or plan text. Low-severity findings may
-fold directly.
+Fold findings back into the plan until the gate closes. Before you fold a `blocker`, a `major` or
+a **scope-changing** finding, spot-verify it against real source or plan text. A `minor` finding at
+confidence 7 or more may fold directly.
 
 ## Step 5 — Review gate B: the adversarial review (the signature move)
 
@@ -251,13 +256,14 @@ Run it via `Workflow` if available, else as parallel subagents in the same three
 stage obeys the fan-out invariants: attackers, verifiers **and the synthesizer** read
 `<run>/LEDGER.md` first, write to `<run>/agents/`, and are **supervised to close**. Do useful prep
 while the wave runs, but keep polling it. The closing steps — spot-verify the top ~2 survivors, fold
-them into the plan, mark it `ENG[+DESIGN]+ADVERSARIAL CLEARED` before any implementation code — are
+them into the plan, mark it `SCOPE+ENG[+DESIGN][+DX]+ADVERSARIAL CLEARED` before any implementation code — are
 in `references/adversarial-review.md`. Calibration: ~40–65% of raw findings typically survive
 verification; a round where nearly all or nearly none survive is a smell; inspect the verify stage.
 
 ## Step 6 — Implement (direct, single-threaded)
 
-Now, and only now, write code — **yourself, in the main thread.** Subagent fan-out is for
+Now, and only now, write code — **yourself, in the main thread.** Follow the plan's `Build order`,
+and write each entry of its `Test requirements`: a `blocker` entry is not optional. Subagent fan-out is for
 investigation and review; it is *not* for writing the implementation. When the deliverable is an
 analysis or a document, "implement" means author it and its checks: the frozen inputs, the second
 independent derivation, and the claim list its tier asserts against. Each rule below that names
@@ -344,7 +350,8 @@ record** (`references/agentic-e2e.md`), never a prose "all green."
   genuinely shared how-to. On a repeated operational failure you repair the procedure that failed,
   and name the file and line.
 - **Write the handoff pack** (`references/limits-and-recovery.md`) and name its path in the closing
-  report.
+  report. It carries gate A's open items: each `taste` decision, each `NOT in scope` item, and each
+  `direction` change you could not ask.
 - **Scoped `git add`** of only this change's files (never `git add -A`) when concurrent WIP is
   present; be transparent in the commit body about unavoidable shared-file bits. **Commit/push only
   when the user asks.**
@@ -384,6 +391,8 @@ it before done.
 7. Content-correctness and render/navigation are still **separate** proofs.
 8. Whatever your tier provably cannot exercise is named as uncovered, not folded into the pass.
 9. **Re-check every Constraint the ledger recorded at Step 0.** You used the method the user named.
+10. Each `blocker` test requirement of the plan has a test. Each row of the plan's `E2E drive list`
+    has a proof line, or is named as uncovered.
 
 ## Graceful degradation (this is a global skill — assume nothing)
 
@@ -409,6 +418,9 @@ Read each file at the step that names it.
 - `adversarial-review.md` — the Attack→Verify→Synthesize template, the lens catalog, the schemas.
 - `agentic-e2e.md` — preconditions, harness discovery, tiers, drivers, red/green, the proof record.
 - `investigation-and-plan.md` — the fan-out template and the plan skeleton.
-- `plan-review-rubric.md` — the gate A checklists.
+- `plan-review.md` — gate A: the lenses, the passes, the reviewer prompts, the decision rules.
+- `plan-lens-scope.md`, `plan-lens-eng.md`, `plan-lens-design.md`, `plan-lens-dx.md` — one gate A
+  lens each. A reviewer subagent reads its own file. You read `plan-review.md`, and the tail of a
+  lens file when you close its pass.
 - `limits-and-recovery.md` — rollback, the return path, the stop set, push-back, the cost ceiling,
   the handoff pack.

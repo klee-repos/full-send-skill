@@ -75,12 +75,16 @@ Write `<NAME>-PLAN.md` into the run directory created in Step 0 (scratchpad → 
 
 ```markdown
 # <NAME> — PLAN
-## Goal & scope   (what, and explicitly what's out of scope)
+## Goal & scope   (what, and explicitly what's out of scope: `NOT in scope`, a reason per item)
 ## Constraints    (hard user constraints: design source, prod id, hosting, "no separate screen", …)
 ## Ground truth   (the verified facts this rests on, with file:line)
+## What already exists   (each sub-problem, the code that solves part of it, reused or rebuilt)
 ## Fixes
 ### F1 — <title>   (files touched, exact change, why)
 ### F2 — <title>
+## Design                 (UI work only: the Step 2 reference set and direction; then gate A's design lens)
+## Developer experience   (developer-facing work only: gate A's DX lens fills it)
+## Failure modes          (each failure, tested, handled, what the user sees; critical gaps flagged)
 ## Test-coverage tree
 - path/to/fileA     [UNIT]        — <what it proves>
 - path/to/screen    [E2E-web]     — <the deterministic assertion>
@@ -89,8 +93,15 @@ Write `<NAME>-PLAN.md` into the run directory created in Step 0 (scratchpad → 
 - <native-only>     [DEVICE]      — <flagged: un-provable by web/CLI E2E>
 ## Migration / back-compat
 ## Risks & open forks   (AskUserQuestion only for genuine scope/architecture forks)
-## Review status   (gate A: CLEAR / NEEDS-EDITS · gate B verdict → `<NAME>-adversarial.json`)
+## Review status   (gate A: CLEAR / CLEAR-WITH-GAPS / NEEDS-EDITS · gate B verdict → `<NAME>-adversarial.json`)
+## Review record   (ALWAYS LAST: which lenses fired, the pass lines, the decision log, the themes)
 ```
 
 The tier tags are a default vocabulary — **use the tiers this project actually has**. The
 `Review status` line is what Steps 4–5 clear before any implementation code is written.
+
+Everything above `## Review record` is the **plan body**. Gate A's reviewers and Step 6 read the
+plan body only, so a requirement must stand in the body. Gate A fills the sections it owns and
+writes its analysis below the line (`plan-review.md`). Leave a section empty until its lens runs,
+with one exception: at Step 3, write the Step 2 reference set, the direction, and the path of each
+image the user gave into `## Design`. The design reviewer has no other way to read them.

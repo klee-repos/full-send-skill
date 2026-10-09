@@ -28,10 +28,14 @@ git-committed** — all of it is scratch.
 ├── <NAME>-RCA.md                 # bugs only
 ├── <NAME>-PLAN.md
 ├── <NAME>-adversarial.json       # the synthesizer object, per round
+├── pre/                          # the start state: the plan before gate A, and any undo copy
 ├── proof/                        # proof records, driver scripts, logs, screenshots
 └── agents/
     ├── MANIFEST.jsonl            # one line per spawned agent (see below)
+    ├── gateA-<pass>-input.md     # gate A: the frozen plan body one pass reviews — you write it
+    ├── gateA-<pass>-<lens>-<a|b>.json  # gate A: one reviewer; a later spawn adds -r2, never overwrites
     ├── <phase>-<key>.json        # that agent's FULL output — the agent writes it
+    ├── <phase>-<key>.md          # gate A checklist reviewers only: plan-ready text of their outputs
     └── <phase>-<key>.progress    # that agent's append-only heartbeat — the agent writes it
 ```
 
@@ -57,7 +61,7 @@ One `MANIFEST.jsonl` line per agent, appended **at spawn time**, not at return:
 ## Items        per-item state when the request names several items; the whole record with no tracker
 ## Capabilities one line per orchestration primitive: available, or blocked and by what
 ## Hold         the phase after which the user wants to look; the run stops there
-## Cost ceiling agents per wave, waves, wall clock; and the returns to Step 3 you have used
+## Cost ceiling agents per wave, waves, wall clock; the returns to Step 3 you have used; the gate A re-runs the user caused
 ## Stop set     for an open-ended request: the concrete changes it covers, frozen after Step 1
 ## Open         what is still unknown or uncovered; and any scope you narrowed, written down
 ```
@@ -91,6 +95,7 @@ attacker, verifier, synthesizer, driver:
    `"status":"complete"` on the last write. A long final emit is how these agents die. Most agent
    deaths land on a transport error, and many arrive before the agent's first tool call. Read-only
    agents are read-only *on the project*; their two files under `agents/` are their only writes.
+   A gate A checklist reviewer also writes the one `.md` file its prompt names.
    **Write no scratch file** there — the orchestrator collects that directory by glob.
 3. **APPEND a heartbeat line to `<run>/agents/<phase>-<key>.progress` at every milestone** — started,
    read <file>, found N candidates, verifying, writing output. An agent with no new line across two
