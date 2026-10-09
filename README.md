@@ -1,45 +1,25 @@
-# full-send
+<div align="center">
 
-A [Claude Code](https://claude.com/claude-code) skill that runs a rigorous delivery pipeline end-to-end and autonomously:
+```text
+█▀▀ █ █ █   █       ▄▀▀ █▀▀ █▄ █ █▀▄
+█▀  █ █ █   █   ▀▀▀  ▀▄ █▀  █ ▀█ █ █
+▀   ▀▀▀ ▀▀▀ ▀▀▀     ▀▀  ▀▀▀ ▀  ▀ ▀▀ 
+```
 
-**ground-truth investigation → plan → plan review → adversarial review → implement → agentic end-to-end validation → loop until green-with-proof.**
+<kbd><b>version</b> 1.5.0</kbd> [<kbd><b>license</b> MIT</kbd>](LICENSE) [<kbd><b>agent</b> Claude Code</kbd>](https://claude.com/claude-code)
 
-The point of the whole thing: **no claim of "done" is trusted unless it is proven against real, observed state through a deterministic verdict the LLM did not author.** Every phase exists to close a specific way a change can *look* done but not be done.
+</div>
 
-## What it does
+**full-send** is a Claude Code skill that runs a delivery pipeline from investigation to proof, and it does not stop for permission at each phase.
 
-Given a feature or bug, `full-send` runs (and loops) this pipeline without stopping to ask permission at each phase:
-
-0. **Contract & board** — restate the pipeline, capture every hard constraint verbatim, and create the run directory and `LEDGER.md` before the first agent is spawned.
-1. **Ground truth** — for bugs, a formal RCA from real data (real DB rows, real logs, real traces) verified before reading source; for features, parallel read-only mapping agents that cite `file:line`.
-2. **Design lane** — for UI work only: reference research, then a cross-check against the project's design source of truth.
-3. **Plan** — written to a scratchpad (never the repo tree, never committed), with numbered fix sections and a test-coverage tree.
-4. **Review gate A: the plan review** — built in, with no other skill. Up to four lenses review the plan in order: scope (always), design (UI work), developer experience (developer-facing work), then engineering (always, last). Each lens gets two independent reviewers that read one frozen copy of the plan. The run decides every finding by six fixed principles and logs each decision. It never decides a change to the direction the user gave: that one goes to the user.
-5. **Review gate B: the adversarial review** (the signature move) — N single-lens attackers cite `file:line` → per-finding fresh verifiers that **default to REFUTED** → synthesize survivors into plan edits and a GO / GO-WITH-PATCHES / NO-GO verdict. Asymmetric skepticism is the anti-rubber-stamp mechanism.
-6. **Implement** — direct, single-threaded, in the main thread. Fan-out is for investigation and review, not for writing code.
-7. **Agentic end-to-end validation** — a deterministic assertion against the REAL running artifact (CLI binary, live endpoint, real user clicks on real screens). The LLM never decides pass/fail.
-8. **Loop** — debug from real signal, re-run the adversarial pass, prove red/green on every new test, until stable green-with-proof against current state.
-9. **Close out** — a handoff pack for the human reviewer, the tracked work item refreshed from the final diff, and every number in the closing report re-derived from disk.
-
-Two invariants hold across every phase that fans work out to agents:
-
-- **Shared state lives in files, not in context.** A run directory with a `LEDGER.md` is created before the first agent is spawned. Every agent reads the ledger first and writes its full output to its own file, returning only a path + `status` + a short receipt. Context is a cache of those files, never the system of record — it's what a compaction takes, and what a subagent never had. This is what keeps N fanned-out agents working from one picture of reality instead of N drifting ones.
-- **Every spawned agent is supervised until it's accounted for.** Agents are recorded in a manifest at spawn, heartbeat to a `.progress` file, and are *killed* — not waited on — when they stop progressing, then re-spawned once narrower before the orchestrator covers the slice itself. A wave closes only when every member is `done`, covered, or named `uncovered`. Dead and stalled agents are the quietest failure mode here: they return empty, and empty reads as clean. The same guard applies to the macro loop — a round that produces no new observed signal is a stall, not an iteration, and it ends in an honest unproven report rather than another round.
-
-## Writing standard
-
-Every human-readable string the pipeline emits is written in [ASD-STE100](https://www.asd-ste100.org/) Simplified Technical English: the ledger, the RCA, the plan, agent findings, the proof record, **code comments and docstrings**, log and error strings, commit messages, and PR bodies.
-
-Short sentences, active voice with the actor named, one word for one meaning, no idiom or metaphor. A long autonomous run emits a lot of prose, and prose nobody can read quickly is prose nobody reads.
-
-Exact terms are exempt, and they outrank the style — identifiers, API and file names, error strings, `file:line` cites, and every quoted observed value stay verbatim. Simplifying an observed value would turn a proof into a paraphrase of one, so the proof rules win. The standard reaches subagents through the ledger's `Style` entry, because a subagent inherits no context.
+A change can look done and not be done. So full-send trusts no claim of "done" until a deterministic check proves it against real, observed state. The model does not write that verdict.
 
 ## Install
 
-This repo packages the skill under `skill/full-send/`. **Recommended: install via symlink** so the live skill stays in sync with the repo — edit in the repo, `git push`, and your installed copy updates automatically (no re-copy step, no drift):
+full-send needs [Claude Code](https://claude.com/claude-code) and no other skill. Run these commands from the folder that holds your clones.
 
 ```bash
-# clone + symlink (recommended — single source of truth)
+# link (recommended): the installed skill follows your clone
 git clone https://github.com/klee-repos/full-send-skill   # skip if already cloned
 mkdir -p ~/.claude/skills
 rm -rf ~/.claude/skills/full-send    # replace ANY prior install: symlink OR copied directory
@@ -47,41 +27,55 @@ ln -s "$(pwd)/full-send-skill/skill/full-send" ~/.claude/skills/full-send
 test -f ~/.claude/skills/full-send/SKILL.md \
   && echo "full-send installed" \
   || echo "BROKEN LINK — re-run from the directory that CONTAINS full-send-skill/"
-```
 
-The `rm -rf` matters: `ln -sf` alone cannot unlink a *directory*, so over a prior copy-install it
-exits 0, nests a link inside it, and leaves you loading the stale skill forever with no symptom. The
-`test` line catches the other silent failure — `ln -s` also exits 0 against a wrong source path,
-leaving a dangling link. (`rm -rf` on a symlink removes only the link; your clone is untouched.)
-
-If you prefer a static copy (no auto-sync), copy instead:
-
-```bash
+# copy: a static copy that does not follow your clone
 git clone https://github.com/klee-repos/full-send-skill
 mkdir -p ~/.claude/skills
 rm -rf ~/.claude/skills/full-send   # replace any prior install, don't nest inside it
 cp -R full-send-skill/skill/full-send ~/.claude/skills/full-send
 ```
 
-> **Note on the symlink approach:** the live skill `~/.claude/skills/full-send` becomes a pointer to your local clone. To update it, just `git pull` in the clone — the installed skill sees the new files immediately. If you ever move the clone, recreate the link: `rm -rf ~/.claude/skills/full-send && ln -s <newpath>/skill/full-send ~/.claude/skills/full-send`.
+> **Keep the `rm -rf` line.** `ln -sf` cannot replace a directory. Over an old copy, it nests a link inside the copy, and you keep the old skill with no error.
 
-Then invoke it from a Claude Code session: ask for the pipeline by name (e.g. *"full-send this bugfix"*, *"plan → adversarial review → build → e2e, loop until verified"*).
+With the link, run `git pull` in the clone to update the skill. If you move the clone, make the link again.
 
-## Dependencies
+## Use
 
-`full-send` needs no other skill. Every phase, the plan review included, is in this repository.
+Ask for the pipeline in a Claude Code session. Name it, or name the phases you want.
 
-One integration is optional:
-
-- **Mobbin MCP** (`mcp__mobbin__search_screens` / `search_flows`) — design references for UI work. When it is absent, the skill uses the screenshots you give it and the design source of the project.
-
-**No QA skill sits on the E2E driver ladder, by design.** A QA skill that autonomously *fixes* what it finds takes ownership of a diff that is yours, and one that requires a clean git tree cannot run at Step 7 at all — Step 7 is reached with the whole implementation uncommitted. `full-send` drives the real artifact itself, or authors a harness out-of-tree.
-
-See the "Graceful degradation" section of `skill/full-send/SKILL.md` for the fallback rules.
-
-## Repo layout
-
+```text
+full-send this bugfix                                       # the whole pipeline, by name
+plan, adversarial review, build, e2e, loop until verified   # the same pipeline, by its phases
+RCA this bug then fix it with proof                         # a bug: the root cause first
+validate with agentic tests like a real user                # the end-to-end proof
 ```
+
+The skill first restates your request as a phase contract and records each hard constraint in your words. It creates a run directory with a `LEDGER.md` before it starts an agent. Then it runs every phase. It asks you about a real fork of scope or architecture. It also asks before an action that other people can see, such as a push or a deploy.
+
+## What it does
+
+- **Ground truth**: for a bug, the skill does a formal RCA from real data before it reads source. For a feature, read-only agents map the code and cite `file:line`.
+- **Plan**: the plan goes to a scratchpad, never to the repo. It has numbered fixes and a test-coverage tree.
+- **Plan review**: up to four lenses review the plan: scope, design, developer experience and engineering. Each lens gets two independent reviewers that read one frozen copy of the plan.
+- **Adversarial review**: single-lens attackers cite `file:line`. A fresh verifier for each finding starts at REFUTED. A synthesis gives GO, GO-WITH-PATCHES or NO-GO.
+- **Implement**: the main thread writes the code. Agents investigate and review, and they do not write the implementation.
+- **End-to-end proof**: a deterministic assertion runs against the real artifact: a CLI binary, a live endpoint, or real clicks on real screens.
+- **Loop**: the skill debugs from real signal and runs the adversarial review again, until a stable green with proof.
+- **Close out**: you get a handoff pack, and every number in the closing report comes from disk.
+
+Two rules hold in every phase that uses agents. Shared state lives in files: each agent reads the ledger first and writes its full output to its own file. The run supervises each agent until it can account for that agent, because a dead agent returns nothing, and nothing reads as clean.
+
+The plan review needs no other skill. The run decides every finding by six fixed principles and logs each decision. It never decides a change to the direction you gave, so that question goes to you.
+
+Every string the pipeline writes follows [ASD-STE100](https://www.asd-ste100.org/) Simplified Technical English. Exact terms stay verbatim: identifiers, file names, error strings and each observed value.
+
+For UI work, the skill uses the Mobbin MCP for design references when you connect it. Without it, the skill uses the screenshots you give it and the design source of the project.
+
+## Docs
+
+`skill/full-send/SKILL.md` holds the pipeline. Each file in `references` holds one phase in detail.
+
+```text
 skill/full-send/
 ├── SKILL.md                              # the skill (frontmatter + pipeline)
 └── references/
@@ -99,6 +93,4 @@ skill/full-send/
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
-
-[NOTICE](NOTICE) names the prior work that the plan review builds on.
+MIT. See [LICENSE](LICENSE). [NOTICE](NOTICE) names the prior work that the plan review builds on.
