@@ -1,14 +1,13 @@
-Required Notice: Copyright 2026 Kevin Lee. full-send (https://github.com/klee-repos/full-send-skill)
+full-send
+Copyright (c) 2026 Kevin Lee
+https://github.com/klee-repos/full-send-skill
 
-full-send is licensed under the PolyForm Noncommercial License 1.0.0.
-See LICENSE, or https://polyformproject.org/licenses/noncommercial/1.0.0
+full-send is licensed under the MIT License. See LICENSE.
 
-Noncommercial use is free. This includes personal study, hobby projects,
-amateur pursuits, research, and use by charities, schools, and government
-bodies.
+Acknowledgement
 
-Commercial use is NOT granted by that license. You must buy a separate
-commercial license. See COMMERCIAL.md, or write to kevin@kvnlee.com.
+The plan review of this skill restates, in new words, review methods from
+gstack (https://github.com/garrytan/gstack). The files are
+references/plan-review.md and references/plan-lens-*.md.
 
-If you distribute this software, or any part of it, you must keep this
-notice with it.
+gstack: Copyright (c) 2026 Garry Tan. MIT License.

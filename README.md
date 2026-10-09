@@ -99,21 +99,6 @@ skill/full-send/
 
 ## License
 
-**Free for noncommercial use. Commercial use must be purchased.**
+MIT. See [LICENSE](LICENSE).
 
-`full-send` is licensed under the
-[PolyForm Noncommercial License 1.0.0](LICENSE) (SPDX: `PolyForm-Noncommercial-1.0.0`).
-
-| Your use | Cost |
-|---|---|
-| Personal study, hobby project, experiment, amateur work | **Free** |
-| Charity, school, public research body, government body | **Free** |
-| Work for a company or a client | **Buy a license** |
-| A product or service you sell | **Buy a license** |
-| Internal use at a for-profit company | **Buy a license** |
-
-If you pass on a copy of any part of this software, you must keep the
-`Required Notice:` line from [LICENSE](LICENSE) with it.
-
-To buy a commercial license, write to **kevin@kvnlee.com**.
-See [COMMERCIAL.md](COMMERCIAL.md) for terms and the credit requirement.
+[NOTICE](NOTICE) names the prior work that the plan review builds on.

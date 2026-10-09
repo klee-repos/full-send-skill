@@ -1,6 +1,6 @@
 ---
 name: full-send
-license: PolyForm-Noncommercial-1.0.0
+license: MIT
 metadata:
   version: 1.5.0
 description: >-
